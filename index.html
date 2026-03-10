@@ -113,6 +113,7 @@
     background: #0a0a0a;
     min-height: 80px;
     transition: all 0.3s;
+    margin-bottom: 16px;
   }
 
   .result-label {
@@ -142,9 +143,58 @@
     100% { transform: scale(1); opacity: 1; }
   }
 
+  .history {
+    margin-top: 8px;
+  }
+
+  .history-label {
+    color: #333;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border: 1px solid #1a1a1a;
+    margin-bottom: 4px;
+    font-size: 11px;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .history-item:hover {
+    border-color: #22c55e44;
+    color: #22c55e;
+    background: #0f1a0f;
+  }
+
+  .history-item .h-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+  .history-item .h-num { color: #22c55e88; font-size: 10px; }
+
+  .copy-btn {
+    margin-top: 0;
+    margin-bottom: 16px;
+    background: transparent;
+    border: 1px solid #22c55e44;
+    color: #22c55e;
+    font-size: 9px;
+    padding: 10px;
+  }
+
+  .copy-btn:hover {
+    background: #0f1a0f;
+    box-shadow: none;
+  }
+
   .formula-note {
-    margin-top: 20px;
-    color: #2a2a2a;
+    margin-top: 16px;
+    color: #222;
     font-size: 10px;
     letter-spacing: 1px;
     line-height: 1.8;
@@ -172,7 +222,7 @@
   <div class="corner br"></div>
 
   <h1>SEED<br>CONVERTER</h1>
-  <p class="subtitle">Java Edition · hashCode()</p>
+  <p class="subtitle">Java Edition · 32-bit hashCode()</p>
 
   <label>Enter Seed Text</label>
   <input type="text" id="seedInput" placeholder="e.g. Xk9#mP2vQw5!nL8j..." oninput="convert()" />
@@ -184,26 +234,37 @@
     <div class="result-number" id="output">—</div>
   </div>
 
-  <p class="formula-note">formula: h = (h × 31) + ascii(char) → clamped to 64-bit int</p>
+  <button class="copy-btn" onclick="copyResult()">⧉ COPY SEED NUMBER</button>
+
+  <div class="history" id="historyBox" style="display:none">
+    <div class="history-label">History (click to reload)</div>
+    <div id="historyList"></div>
+  </div>
+
+  <p class="formula-note">formula: h = (h × 31) + ascii(char) → signed 32-bit int</p>
 </div>
 
 <script>
+  const history = [];
+
+  // Java's String.hashCode() is 32-bit signed
   function javaHashCode(str) {
-    let hash = BigInt(0);
-    const MOD = BigInt(2) ** BigInt(64);
-    const HALF = BigInt(2) ** BigInt(63);
-
+    let hash = 0;
     for (let i = 0; i < str.length; i++) {
-      hash = (hash * BigInt(31) + BigInt(str.charCodeAt(i))) % MOD;
+      // Use 32-bit signed integer overflow like Java does
+      hash = Math.imul(31, hash) + str.charCodeAt(i);
+      // Force 32-bit signed overflow
+      hash |= 0;
     }
-
-    // Convert to signed 64-bit
-    if (hash >= HALF) hash -= MOD;
-    return hash.toString();
+    return hash;
   }
 
-  function convert() {
-    const val = document.getElementById('seedInput').value;
+  function convert(prefill) {
+    const input = document.getElementById('seedInput');
+    if (prefill !== undefined) {
+      input.value = prefill;
+    }
+    const val = input.value;
     const out = document.getElementById('output');
 
     if (!val) {
@@ -216,6 +277,36 @@
     out.classList.remove('pop');
     void out.offsetWidth;
     out.classList.add('pop');
+
+    // Add to history if not duplicate of last entry
+    if (history.length === 0 || history[history.length - 1].text !== val) {
+      history.push({ text: val, num: result });
+      if (history.length > 8) history.shift();
+      renderHistory();
+    }
+  }
+
+  function renderHistory() {
+    const box = document.getElementById('historyBox');
+    const list = document.getElementById('historyList');
+    if (history.length === 0) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    list.innerHTML = [...history].reverse().map(h =>
+      `<div class="history-item" onclick="convert('${h.text.replace(/'/g, "\\'")}')">
+        <span class="h-text">${h.text}</span>
+        <span class="h-num">${h.num}</span>
+      </div>`
+    ).join('');
+  }
+
+  function copyResult() {
+    const val = document.getElementById('output').textContent;
+    if (val === '—') return;
+    navigator.clipboard.writeText(val).then(() => {
+      const btn = document.querySelector('.copy-btn');
+      btn.textContent = '✓ COPIED!';
+      setTimeout(() => btn.textContent = '⧉ COPY SEED NUMBER', 1500);
+    });
   }
 </script>
 </body>
